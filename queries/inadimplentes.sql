@@ -42,36 +42,51 @@ HIST_COM_CLUSTER AS (
         END AS CLUSTER_ATUAL
     FROM
         HIST H
-        LEFT JOIN (
+        LEFT JOIN CLUSTERS C ON H.CLIENTE_ID = C.CLIENTE_ID
+),
+PARCELAS AS (
+    SELECT
+        CLIENTE_ID,
+        COUNT(*) AS QTD_FATURAS_ABERTO
+    FROM
+        (
             SELECT
-                CLIENTE_ID,
-                MAX(CLUSTER_ATUAL) AS CLUSTER_ATUAL
-            FROM
-                CLUSTERS
-            GROUP BY
                 CLIENTE_ID
-        ) C ON H.CLIENTE_ID = C.CLIENTE_ID
+            FROM
+                FATURAS_CARTAO_CREDITO
+            WHERE
+                STATUS_PROVIDER = 'pending'
+            UNION
+            ALL
+            SELECT
+                CLIENTE_ID
+            FROM
+                FATURAS_CARNE
+            WHERE
+                STATUS_PROVIDER = 'overdue'
+        ) AS FATURAS_ABERTAS
+    GROUP BY
+        CLIENTE_ID
 ),
 HIST_INAD AS (
     SELECT
         C.ID,
         C.DATA_INICIO_PLANO,
-        /*------------------------------------------------*/
         CASE
             WHEN DATEDIFF(
                 DAY,
                 C.DATA_INICIO_PLANO,
-                CONVERT(DATE, GETDATE())
+                CAST(GETDATE() AS DATE)
             ) < 2 THEN '1 Dia'
             WHEN DATEDIFF(
                 DAY,
                 C.DATA_INICIO_PLANO,
-                CONVERT(DATE, GETDATE())
+                CAST(GETDATE() AS DATE)
             ) <= 30 THEN CONCAT(
                 DATEDIFF(
                     DAY,
                     C.DATA_INICIO_PLANO,
-                    CONVERT(DATE, GETDATE())
+                    CAST(GETDATE() AS DATE)
                 ),
                 ' Dias'
             )
@@ -80,14 +95,13 @@ HIST_INAD AS (
                     DATEDIFF(
                         DAY,
                         C.DATA_INICIO_PLANO,
-                        CONVERT(DATE, GETDATE())
-                    ) / 30,
+                        CAST(GETDATE() AS DATE)
+                    ) / 30.0,
                     1
                 ),
                 ' Meses'
             )
         END AS TEMPO_DE_CASA,
-        /*------------------------------------------------*/
         C.DATA_NASCIMENTO,
         C.IDADE,
         C.NOME,
@@ -96,7 +110,7 @@ HIST_INAD AS (
         C.TELEFONE_4,
         C.CPF,
         C.ENDERECO_ID,
-        TRIM(REPLACE(E.CEP, '	', '')) AS CEP,
+        TRIM(REPLACE(E.CEP, CHAR(9), '')) AS CEP,
         C.STATUS_CLIENTE_ID,
         SC.NOME AS STATUS_CLIENTE,
         C.FORMA_PAGAMENTO_ID,
@@ -106,23 +120,22 @@ HIST_INAD AS (
         C.TIPO_CONTRATO,
         C.GENERO,
         CASE
-            WHEN C.FORMA_PAGAMENTO_ID = 14 THEN CASE
-                WHEN C.VALOR_DESCONTO_CARNE = 0
-                OR C.VALOR_DESCONTO_CARNE IS NULL THEN P.MENSALIDADE_CARNE
-                ELSE C.VALOR_DESCONTO_CARNE
-            END
-            WHEN C.FORMA_PAGAMENTO_ID = 13 THEN CASE
-                WHEN C.VALOR_DESCONTO_CARTAO_CREDITO = 0
-                OR C.VALOR_DESCONTO_CARTAO_CREDITO IS NULL THEN P.MENSALIDADE_CARTAO_CREDITO
-                ELSE C.VALOR_DESCONTO_CARTAO_CREDITO
-            END
+            WHEN C.FORMA_PAGAMENTO_ID = 14 THEN ISNULL(
+                NULLIF(C.VALOR_DESCONTO_CARNE, 0),
+                P.MENSALIDADE_CARNE
+            )
+            WHEN C.FORMA_PAGAMENTO_ID = 13 THEN ISNULL(
+                NULLIF(C.VALOR_DESCONTO_CARTAO_CREDITO, 0),
+                P.MENSALIDADE_CARTAO_CREDITO
+            )
             ELSE NULL
         END AS DESCONTO_VALOR,
         I.DATA_ALTERACAO,
         I.STATUS_ANTERIOR,
         I.STATUS_ALTERADO,
         I.ALTERACAO,
-        I.CLUSTER_ATUAL AS CLUSTER
+        I.CLUSTER_ATUAL AS CLUSTER,
+        PC.QTD_FATURAS_ABERTO
     FROM
         CLIENTES C
         LEFT JOIN PLANOS P ON C.PLANO_ID = P.ID
@@ -130,6 +143,7 @@ HIST_INAD AS (
         LEFT JOIN STATUS_CLIENTE SC ON C.STATUS_CLIENTE_ID = SC.ID
         LEFT JOIN ENDERECOS E ON C.ENDERECO_ID = E.ID
         LEFT JOIN HIST_COM_CLUSTER I ON C.ID = I.CLIENTE_ID
+        LEFT JOIN PARCELAS PC ON C.ID = PC.CLIENTE_ID
     WHERE
         C.STATUS_CLIENTE_ID = 33
         AND C.FORMA_PAGAMENTO_ID IN (13, 14)
