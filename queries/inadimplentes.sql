@@ -1,19 +1,21 @@
 WITH HIST AS (
     SELECT
+        DISTINCT CAST(HS.DATA_ALTERACAO AS DATE) AS DATA_ALTERACAO,
         HS.CLIENTE_ID,
         HS.STATUS_ANTERIOR,
         HS.STATUS_ALTERADO,
         CASE
             WHEN HS.STATUS_ANTERIOR = 3
             AND HS.STATUS_ALTERADO = 33 THEN 'INADIMPLENCIA'
+            WHEN HS.STATUS_ANTERIOR = 2
+            AND HS.STATUS_ALTERADO = 3 THEN 'REATIVACAO'
             ELSE 'REATIVACAO'
-        END AS ALTERACAO,
-        HS.DATA_ALTERACAO
+        END AS ALTERACAO
     FROM
         HISTORICO_STATUS HS
     WHERE
         HS.STATUS_ALTERADO IN (3, 33)
-        AND HS.STATUS_ANTERIOR IN (3, 33)
+        AND HS.STATUS_ANTERIOR IN (2, 3, 33)
 ),
 CLUSTERS AS (
     SELECT
@@ -27,8 +29,8 @@ CLUSTERS AS (
     FROM
         HIST
     WHERE
-        ALTERACAO = 'REATIVACAO'
-        AND DATA_ALTERACAO >= DATEADD(MONTH, -6, GETDATE())
+        DATA_ALTERACAO BETWEEN DATEADD(MONTH, -6, GETDATE())
+        AND GETDATE()
     GROUP BY
         CLIENTE_ID
 ),
@@ -56,6 +58,7 @@ PARCELAS AS (
                 FATURAS_CARTAO_CREDITO
             WHERE
                 STATUS_PROVIDER = 'pending'
+                AND DATA_VENCIMENTO >= DATEADD(MONTH, -4, GETDATE())
             UNION
             ALL
             SELECT
@@ -64,6 +67,7 @@ PARCELAS AS (
                 FATURAS_CARNE
             WHERE
                 STATUS_PROVIDER = 'overdue'
+                AND DATA_VENCIMENTO >= DATEADD(MONTH, -4, GETDATE())
         ) AS FATURAS_ABERTAS
     GROUP BY
         CLIENTE_ID
@@ -90,20 +94,59 @@ HIST_INAD AS (
                 ),
                 ' Dias'
             )
-            ELSE CONCAT(
-                ROUND(
+            ELSE CASE
+                WHEN CEILING(
                     DATEDIFF(
                         DAY,
                         C.DATA_INICIO_PLANO,
                         CAST(GETDATE() AS DATE)
-                    ) / 30.0,
-                    1
-                ),
-                ' Meses'
-            )
+                    ) / 30.0
+                ) > 12 THEN CONCAT(
+                    FORMAT(
+                        FLOOR(
+                            CEILING(
+                                DATEDIFF(
+                                    DAY,
+                                    C.DATA_INICIO_PLANO,
+                                    CAST(GETDATE() AS DATE)
+                                ) / 30.0
+                            ) / 12.0
+                        ),
+                        'N0',
+                        'pt-BR'
+                    ),
+                    ' Anos'
+                )
+                ELSE CONCAT(
+                    FORMAT(
+                        CEILING(
+                            DATEDIFF(
+                                DAY,
+                                C.DATA_INICIO_PLANO,
+                                CAST(GETDATE() AS DATE)
+                            ) / 30.0
+                        ),
+                        'N0',
+                        'pt-BR'
+                    ),
+                    ' Meses'
+                )
+            END
         END AS TEMPO_DE_CASA,
         C.DATA_NASCIMENTO,
         C.IDADE,
+        CASE
+            WHEN C.IDADE BETWEEN 0
+            AND 18 THEN '0 a 18'
+            WHEN C.IDADE BETWEEN 19
+            AND 34 THEN '19 a 34'
+            WHEN C.IDADE BETWEEN 35
+            AND 55 THEN '35 a 55'
+            WHEN C.IDADE BETWEEN 56
+            AND 75 THEN '56 a 75'
+            WHEN C.IDADE >= 76 THEN '75+'
+            ELSE 'Idade inválida'
+        END AS FAIXA_ETARIA,
         C.NOME,
         C.TELEFONE_FIXO,
         C.TELEFONE_3,
@@ -117,7 +160,10 @@ HIST_INAD AS (
         FP.NOME AS FORMA_PAGAMENTO,
         C.PLANO_ID,
         P.NOME AS PLANO,
-        C.TIPO_CONTRATO,
+        CASE
+            WHEN C.TIPO_CONTRATO IS NULL THEN 'Contrato digital'
+            ELSE C.TIPO_CONTRATO
+        END AS TIPO_CONTRATO,
         C.GENERO,
         CASE
             WHEN C.FORMA_PAGAMENTO_ID = 14 THEN ISNULL(
@@ -130,7 +176,7 @@ HIST_INAD AS (
             )
             ELSE NULL
         END AS DESCONTO_VALOR,
-        I.DATA_ALTERACAO,
+        CAST(I.DATA_ALTERACAO AS DATETIME) AS DATA_ALTERACAO,
         I.STATUS_ANTERIOR,
         I.STATUS_ALTERADO,
         I.ALTERACAO,
@@ -147,10 +193,11 @@ HIST_INAD AS (
     WHERE
         C.STATUS_CLIENTE_ID = 33
         AND C.FORMA_PAGAMENTO_ID IN (13, 14)
-        AND C.ID NOT IN ('111295', '111302', '111304')
+        AND C.ID NOT IN ('111295', '111302', '111304', '91225')
 )
 SELECT
-    *
+    *,
+    DESCONTO_VALOR * QTD_FATURAS_ABERTO AS VALOR_ACUMULADO
 FROM
     HIST_INAD
 ORDER BY
