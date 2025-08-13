@@ -603,3 +603,13 @@ requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetErro
 2025-08-07 17:26:12 [INFO] - Limpando a worksheet.
 2025-08-07 17:26:13 [INFO] - Inserindo novos dados na worksheet.
 2025-08-07 17:26:23 [INFO] - Processo finalizado com sucesso.
+2025-08-13 10:25:06 [INFO] - Iniciando o processo de atualização de dados.
+2025-08-13 10:25:06 [INFO] - Carregando query SQL.
+2025-08-13 10:25:06 [INFO] - Conectando ao SQL Server.
+2025-08-13 10:25:42 [ERROR] - Erro durante o processo: ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]Named Pipes Provider: Could not open a connection to SQL Server [64].  (64) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 18 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to 162.215.175.144. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (64)')
+Traceback (most recent call last):
+  File "C:\0_Py\INADIMPLENTES\main.py", line 37, in main
+    conn = connect_sql_server(CONN_STRING)
+  File "C:\0_Py\INADIMPLENTES\mods\sql_server.py", line 5, in connect_sql_server
+    conn = pyodbc.connect(conn_str)
+pyodbc.OperationalError: ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]Named Pipes Provider: Could not open a connection to SQL Server [64].  (64) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 18 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to 162.215.175.144. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (64)')
